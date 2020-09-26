@@ -1,88 +1,51 @@
-// Encoder
-
-// create encoder
-// channels: 1-2
-// samplerate: 8000,12000,16000,24000,48000
-// bitrate: see Opus recommended bitrates
-// frame_size: frame size in milliseconds (2.5,5,10,20,40,60), 20 is recommended
-// voice_optimization: true/false 
-function Encoder(channels, samplerate, bitrate, frame_size, voice_optimization)
-{
-  this.enc = Module._Encoder_new.apply(null, arguments);
-  this.out = Module._String_new();
-}
-
-// free encoder memory
-Encoder.prototype.destroy = function()
-{ 
-  Module._Encoder_delete(this.enc); 
-  Module._String_delete(this.out);
-}
-
-// add samples to the encoder buffer
-// samples: Int16Array of interleaved (if multiple channels) samples
-Encoder.prototype.input = function(samples)
-{
-  var ptr = Module._malloc(samples.length*samples.BYTES_PER_ELEMENT);
-  var pdata = new Uint8Array(Module.HEAPU8.buffer, ptr, samples.length*samples.BYTES_PER_ELEMENT);
-  pdata.set(new Uint8Array(samples.buffer, samples.byteOffset, samples.length*samples.BYTES_PER_ELEMENT));
-
-  Module._Encoder_input(this.enc, ptr, samples.length);
-  Module._free(ptr);
-}
-
-// output the next encoded packet
-// return Uint8Array (valid until the next output call) or null if there is no packet to output
-Encoder.prototype.output = function()
-{
-  var ok = Module._Encoder_output(this.enc, this.out);
-  if(ok)
-    return new Uint8Array(Module.HEAPU8.buffer, Module._String_data(this.out), Module._String_size(this.out));
-}
-
 // Decoder
 
 // create decoder
 // channels and samplerate should match the encoder options
-function Decoder(channels, samplerate)
-{
-  this.dec = Module._Decoder_new.apply(null, arguments);
-  this.out = Module._Int16Array_new();
+function Decoder(channels, samplerate) {
+	this.dec = Module._Decoder_new.apply(null, arguments);
+	this.channel_data = Module._ChannelData_new();
 }
 
 // free decoder memory
-Decoder.prototype.destroy = function()
-{ 
-  Module._Decoder_delete(this.dec); 
-  Module._Int16Array_delete(this.out);
+Decoder.prototype.destroy = function () {
+	Module._Decoder_delete(this.dec);
+	Module._ChannelData_delete(this.channel_data);
 }
 
 // add packet to the decoder buffer
 // packet: Uint8Array
-Decoder.prototype.input = function(packet)
-{
-  var ptr = Module._malloc(packet.length*packet.BYTES_PER_ELEMENT);
-  var pdata = new Uint8Array(Module.HEAPU8.buffer, ptr, packet.length*packet.BYTES_PER_ELEMENT);
-  pdata.set(new Uint8Array(packet.buffer, packet.byteOffset, packet.length*packet.BYTES_PER_ELEMENT));
+Decoder.prototype.input = function (packet) {
+	var ptr = Module._malloc(packet.length * packet.BYTES_PER_ELEMENT);
+	var pdata = new Uint8Array(Module.HEAPU8.buffer, ptr, packet.length * packet.BYTES_PER_ELEMENT);
+	pdata.set(new Uint8Array(packet.buffer, packet.byteOffset, packet.length * packet.BYTES_PER_ELEMENT));
 
-  Module._Decoder_input(this.dec, ptr, packet.length);
-  Module._free(ptr);
+	Module._Decoder_input(this.dec, ptr, packet.length);
+	Module._free(ptr);
 }
 
 // output the next decoded samples
 // return samples (interleaved if multiple channels) as Int16Array (valid until the next output call) or null if there is no output
-Decoder.prototype.output = function()
-{
-  var ok = Module._Decoder_output(this.dec, this.out);
-  if(ok)
-    return new Int16Array(Module.HEAPU8.buffer, Module._Int16Array_data(this.out), Module._Int16Array_size(this.out));
+Decoder.prototype.output = function () {
+	let ok = Module._Decoder_output(this.dec, this.channel_data);
+
+	if (!ok) {
+		return null;
+	}
+
+	let result = []
+	for (let i = 0; i < Module._ChannelData_size(this.channel_data); i++) {
+		let channel_ptr = Module._ChannelData_get(this.channel_data, i);
+		result.push(new Float32Array(Module.HEAPF32.buffer, Module._Float32Array_data(channel_ptr), Module._Float32Array_size(channel_ptr)));
+	}
+	Module._ChannelData_clear(this.channel_data);
+
+	return result;
 }
 
-
 //export objects
-Module.Encoder = Encoder;
 Module.Decoder = Decoder;
 
 //make the module global if not using nodejs
-if(Module["ENVIRONMENT"] != "NODE")
-  libopus = Module;
+if (Module["ENVIRONMENT"] !== "NODE")
+	libopus = Module;
