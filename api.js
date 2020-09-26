@@ -9,6 +9,7 @@ function Decoder(channels, samplerate) {
 // free decoder memory
 Decoder.prototype.destroy = function() {
 	Module._Decoder_delete(this.dec);
+	// Module._doLeakCheck();
 }
 
 Decoder.prototype.decode = function(packet) {

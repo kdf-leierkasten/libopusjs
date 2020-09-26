@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+//#include <sanitizer/lsan_interface.h>
 
 typedef std::string String;
 typedef std::vector<float> Float32Array;
@@ -119,13 +120,18 @@ EMSCRIPTEN_KEEPALIVE Float32Array* Float32Array_new() {
     return new std::vector<float>();
 }
 
-EMSCRIPTEN_KEEPALIVE const float *Float32Array_data(Float32Array* self) {
+EMSCRIPTEN_KEEPALIVE const float* Float32Array_data(Float32Array* self) {
     return &(*self)[0];
 }
 
 EMSCRIPTEN_KEEPALIVE void Float32Array_delete(Float32Array* self) {
     delete self;
 }
+
+//EMSCRIPTEN_KEEPALIVE void doLeakCheck() {
+//	std::cout << "Running leak check..." << std::endl;
+//	__lsan_do_recoverable_leak_check();
+//}
 
 }
 
