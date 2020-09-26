@@ -6,38 +6,35 @@
 
 typedef std::string String;
 typedef std::vector<float> Float32Array;
-typedef std::vector<Float32Array*> ChannelData;
 
 class Decoder {
 public:
-    Decoder(int _channels, long int _samplerate) : dec(NULL), samplerate(_samplerate), channels(_channels) {
+	size_t channels;
+	std::vector<Float32Array*> channel_data;
+
+	Decoder(int _channels, long int _samplerate) : dec(NULL), samplerate(_samplerate), channels(_channels) {
         int err;
         dec = opus_decoder_create(samplerate, channels, &err);
 
         buffer_size = 120 / 1000.0 * samplerate * channels; // 120ms max
         buffer = Float32Array(buffer_size);
 
-        channel_buffers = std::vector<Float32Array*>(channels);
+        channel_data = std::vector<Float32Array*>(channels);
         for (size_t i = 0; i < channels; i++) {
-			channel_buffers[i] = new Float32Array();
+			channel_data[i] = new Float32Array();
         }
 
         if (dec == NULL)
             std::cerr << "[libopusjs] error while creating opus decoder (errcode " << err << ")" << std::endl;
     }
 
-    void input(const char *data, size_t size) {
-        packets.emplace_back(data, size);
-    }
-
-    bool output(ChannelData* channel_data) {
+    bool decode(const char* data, size_t size) {
         bool ok = false;
 
-        if (packets.size() > 0 && dec != NULL) {
+        if (dec != NULL) {
             int ret_size = 0;
 
-            //extract samples from packets
-            std::string &packet = packets[0];
+            auto packet = std::string(data, size);
 
             if (packet.size() > 0)
                 ret_size = opus_decode_float(
@@ -53,19 +50,16 @@ public:
                 size_t size = ret_size * channels;
 
 				for (size_t channel_index = 0; channel_index < channels; channel_index++) {
-					Float32Array* cbuf = channel_buffers[channel_index];
+					Float32Array* cbuf = channel_data[channel_index];
 					cbuf->clear();
 					cbuf->reserve(size + 1 / channels);
 					for (int i = channel_index; i < size; i += channels) {
 						cbuf->push_back(buffer[i]);
 					}
-					channel_data->push_back(cbuf);
                 }
 
                 ok = true;
             }
-
-            packets.erase(packets.begin());
         }
 
         return ok;
@@ -76,19 +70,16 @@ public:
 			opus_decoder_destroy(dec);
 		}
 
-        for (int i = 0; i < channel_buffers.size(); i++) {
-        	delete channel_buffers[i];
+        for (int i = 0; i < channel_data.size(); i++) {
+        	delete channel_data[i];
         }
     }
 
 private:
     long int samplerate;
-    int channels;
     OpusDecoder *dec;
-    std::vector<std::string> packets;
     long int buffer_size;
     Float32Array buffer;
-    std::vector<Float32Array*> channel_buffers;
 };
 
 extern "C" {
@@ -102,12 +93,20 @@ EMSCRIPTEN_KEEPALIVE void Decoder_delete(Decoder * self) {
     delete self;
 }
 
-EMSCRIPTEN_KEEPALIVE void Decoder_input(Decoder * self, const char *data, size_t size) {
-	self->input(data, size);
+EMSCRIPTEN_KEEPALIVE bool Decoder_decode(Decoder* self, const char *data, size_t size) {
+    return self->decode(data, size);
 }
 
-EMSCRIPTEN_KEEPALIVE bool Decoder_output(Decoder* self, ChannelData* channel_data) {
-    return self->output(channel_data);
+EMSCRIPTEN_KEEPALIVE Float32Array* Decoder_get_channel_data(Decoder* self, size_t index) {
+	if (index >= self->channels) {
+		return nullptr;
+	}
+
+	return self->channel_data[index];
+}
+
+EMSCRIPTEN_KEEPALIVE size_t Decoder_get_channel_count(Decoder* self) {
+	return self->channels;
 }
 
 // Float32Array
@@ -126,31 +125,6 @@ EMSCRIPTEN_KEEPALIVE const float *Float32Array_data(Float32Array* self) {
 
 EMSCRIPTEN_KEEPALIVE void Float32Array_delete(Float32Array* self) {
     delete self;
-}
-
-// ChannelData
-EMSCRIPTEN_KEEPALIVE ChannelData* ChannelData_new() {
-	return new std::vector<Float32Array*>();
-}
-
-EMSCRIPTEN_KEEPALIVE size_t ChannelData_size(ChannelData* self) {
-	return self->size();
-}
-
-EMSCRIPTEN_KEEPALIVE void ChannelData_clear(ChannelData* self) {
-return self->clear();
-}
-
-EMSCRIPTEN_KEEPALIVE Float32Array* ChannelData_get(ChannelData* self, size_t index) {
-	if (index >= self->size()) {
-		return nullptr;
-	}
-
-	return (*self)[index];
-}
-
-EMSCRIPTEN_KEEPALIVE void ChannelData_delete(ChannelData* self) {
-	delete self;
 }
 
 }
