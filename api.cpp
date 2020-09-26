@@ -27,7 +27,7 @@ public:
     }
 
     void input(const char *data, size_t size) {
-        packets.push_back(std::string(data, size));
+        packets.emplace_back(data, size);
     }
 
     bool output(ChannelData* channel_data) {
@@ -72,8 +72,13 @@ public:
     }
 
     ~Decoder() {
-        if (dec)
-            opus_decoder_destroy(dec);
+        if (dec) {
+			opus_decoder_destroy(dec);
+		}
+
+        for (int i = 0; i < channel_buffers.size(); i++) {
+        	delete channel_buffers[i];
+        }
     }
 
 private:
