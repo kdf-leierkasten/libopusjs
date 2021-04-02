@@ -3,6 +3,8 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+//#include <iomanip>
+//#include <unordered_map>
 //#include <sanitizer/lsan_interface.h>
 
 typedef std::string String;
@@ -11,6 +13,7 @@ typedef std::vector<float> Float32Array;
 class Decoder {
 public:
 	size_t channels;
+	size_t current_decoded_size;
 	std::vector<Float32Array*> channel_data;
 
 	Decoder(int _channels, long int _samplerate) : dec(NULL), samplerate(_samplerate), channels(_channels) {
@@ -19,25 +22,49 @@ public:
 
         buffer_size = 120 / 1000.0 * samplerate * channels; // 120ms max
         buffer = Float32Array(buffer_size);
-
         channel_data = std::vector<Float32Array*>(channels);
-        for (size_t i = 0; i < channels; i++) {
-			channel_data[i] = new Float32Array();
-        }
+        current_decoded_size = 0;
 
         if (dec == NULL)
             std::cerr << "[libopusjs] error while creating opus decoder (errcode " << err << ")" << std::endl;
     }
+
+//	std::time_t clock = std::time(nullptr);
+//	std::chrono::time_point<std::chrono::high_resolution_clock> start;
+//	std::unordered_map<std::string, int64_t> micros;
+//	void measure(std::string name) {
+//		auto end = std::chrono::high_resolution_clock::now();
+//		auto time_taken = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+//		if (micros.count(name) != 0) {
+//			micros[name] += time_taken;
+//		} else {
+//			micros.emplace(name, time_taken);
+//		}
+//
+//		if (std::time(nullptr) - clock > 0) {
+//			uint64_t total = 0;
+//			for (auto& value : micros) {
+//				total += value.second;
+//			}
+//
+//			for (auto& value : micros) {
+//				std::cout << std::fixed << std::setprecision(2) << value.first << ": " << value.second / 1e9 << "s (" << (double) value.second / total * 100  << "%) ";
+//			}
+//			std::cout << std::endl;
+//			clock = std::time(nullptr);
+//		}
+//
+//		start = std::chrono::high_resolution_clock::now();
+//	}
 
     bool decode(const char* data, size_t size) {
         bool ok = false;
 
         if (dec != NULL) {
             int ret_size = 0;
-
             auto packet = std::string(data, size);
 
-            if (packet.size() > 0)
+			if (packet.size() > 0)
                 ret_size = opus_decode_float(
 					dec,
 					(const unsigned char *) packet.c_str(),
@@ -48,16 +75,20 @@ public:
                 );
 
             if (ret_size > 0) {
-                size_t size = ret_size * channels;
-
-				for (size_t channel_index = 0; channel_index < channels; channel_index++) {
-					Float32Array* cbuf = channel_data[channel_index];
-					cbuf->clear();
-					cbuf->reserve(size + 1 / channels);
-					for (int i = channel_index; i < size; i += channels) {
-						cbuf->push_back(buffer[i]);
+                if (current_decoded_size != ret_size) {
+                	// Reinit the output arrays.
+                	current_decoded_size = ret_size;
+					for (size_t channel_index = 0; channel_index < channels; channel_index++) {
+						channel_data[channel_index] = new Float32Array(ret_size, 0);
 					}
                 }
+
+				for (size_t channel_index = 0; channel_index < channels; channel_index++) {
+					Float32Array& channel_buffer = *channel_data[channel_index];
+					for (size_t i = 0; i < ret_size; i++) {
+						channel_buffer[i] = buffer[i * 2 + channel_index];
+					}
+				}
 
                 ok = true;
             }
