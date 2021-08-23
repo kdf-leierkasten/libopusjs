@@ -88,10 +88,10 @@ public:
 			}
 		}
 		
-		for(size_t channel_index = 0; channel_index < channels; channel_index++) {
-			auto &channel_buffer = channel_data[channel_index];
-			for(size_t i = 0; i < ret_size; i++) {
-				channel_buffer[i] = buffer[i * 2 + channel_index];
+		for(size_t i = 0; i < ret_size; i++) {
+			for(size_t channel_index = 0; channel_index < channels; channel_index++) {
+				auto &channel_buffer = channel_data[channel_index];
+				channel_buffer[i] = buffer[i * channels + channel_index];
 			}
 		}
 		return true;
