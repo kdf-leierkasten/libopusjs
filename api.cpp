@@ -17,17 +17,18 @@ public:
 	const size_t channels;
 	size_t current_decoded_size;
 	std::vector<Float32Array> channel_data;
-	
+
 	Decoder(int _channels, int32_t sample_rate) : dec(nullptr), channels(_channels) {
 		if (channels < 0 || sample_rate < 0) {
 			return;
 		}
+
 		int err;
 		dec = opus_decoder_create(sample_rate, _channels, &err);
-		if(dec == nullptr) {
+		if (dec == nullptr) {
 			std::cerr << "[libopusjs] error while creating opus decoder (errcode " << err << ")" << std::endl;
 		}
-		
+
 		const auto buffer_size = (120 * (size_t) sample_rate * channels) / 1000; // 120ms max
 		buffer = Float32Array(buffer_size);
 		channel_data = std::vector<Float32Array>(channels);
@@ -64,12 +65,12 @@ public:
 		start = std::chrono::high_resolution_clock::now();
 	}
 #endif
-	
+
 	bool decode(const char *data, size_t size) {
-		if(dec == nullptr || size == 0) {
+		if (dec == nullptr || size == 0) {
 			return false;
 		}
-		
+
 		const auto ret_size = opus_decode_float(
 				dec,
 				(const unsigned char *) data,
@@ -78,30 +79,30 @@ public:
 				int(buffer.size() / channels),
 				0
 		);
-		
-		if(ret_size < 0) {
+
+		if (ret_size < 0) {
 			return false;
 		}
-		
-		if(current_decoded_size != ret_size) {
+
+		if (current_decoded_size != ret_size) {
 			// Reinit the output arrays.
 			current_decoded_size = ret_size;
-			for(size_t channel_index = 0; channel_index < channels; channel_index++) {
+			for (size_t channel_index = 0; channel_index < channels; channel_index++) {
 				channel_data[channel_index].resize(ret_size, 0);
 			}
 		}
-		
-		for(size_t i = 0; i < ret_size; i++) {
-			for(size_t channel_index = 0; channel_index < channels; channel_index++) {
+
+		for (size_t i = 0; i < ret_size; i++) {
+			for (size_t channel_index = 0; channel_index < channels; channel_index++) {
 				auto &channel_buffer = channel_data[channel_index];
 				channel_buffer[i] = buffer[i * channels + channel_index];
 			}
 		}
 		return true;
 	}
-	
+
 	~Decoder() {
-		if(dec) {
+		if (dec) {
 			opus_decoder_destroy(dec);
 		}
 	}
@@ -127,10 +128,10 @@ EMSCRIPTEN_KEEPALIVE bool Decoder_decode(Decoder *self, const char *data, size_t
 }
 
 EMSCRIPTEN_KEEPALIVE Float32Array *Decoder_get_channel_data(Decoder *self, size_t index) {
-	if(index >= self->channels) {
+	if (index >= self->channels) {
 		return nullptr;
 	}
-	
+
 	return &self->channel_data[index];
 }
 
