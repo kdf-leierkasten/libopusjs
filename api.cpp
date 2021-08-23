@@ -16,7 +16,7 @@ class Decoder {
 public:
 	const size_t channels;
 	size_t current_decoded_size;
-	std::vector<Float32Array *> channel_data;
+	std::vector<Float32Array> channel_data;
 	
 	Decoder(int _channels, int32_t sample_rate) : dec(nullptr), channels(_channels) {
 		int err;
@@ -27,7 +27,7 @@ public:
 		
 		const auto buffer_size = (120 * (unsigned long) sample_rate * channels) / 1000; // 120ms max
 		buffer = Float32Array(buffer_size);
-		channel_data = std::vector<Float32Array *>(channels);
+		channel_data = std::vector<Float32Array>(channels);
 		current_decoded_size = 0;
 	}
 
@@ -84,12 +84,12 @@ public:
 			// Reinit the output arrays.
 			current_decoded_size = ret_size;
 			for(size_t channel_index = 0; channel_index < channels; channel_index++) {
-				channel_data[channel_index] = new Float32Array(ret_size, 0);
+				channel_data[channel_index].resize(ret_size, 0);
 			}
 		}
 		
 		for(size_t channel_index = 0; channel_index < channels; channel_index++) {
-			Float32Array &channel_buffer = *channel_data[channel_index];
+			auto &channel_buffer = channel_data[channel_index];
 			for(size_t i = 0; i < ret_size; i++) {
 				channel_buffer[i] = buffer[i * 2 + channel_index];
 			}
@@ -128,7 +128,7 @@ EMSCRIPTEN_KEEPALIVE Float32Array *Decoder_get_channel_data(Decoder *self, size_
 		return nullptr;
 	}
 	
-	return self->channel_data[index];
+	return &self->channel_data[index];
 }
 
 EMSCRIPTEN_KEEPALIVE size_t Decoder_get_channel_count(Decoder *self) {
