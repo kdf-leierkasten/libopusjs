@@ -19,13 +19,16 @@ public:
 	std::vector<Float32Array> channel_data;
 	
 	Decoder(int _channels, int32_t sample_rate) : dec(nullptr), channels(_channels) {
+		if (channels < 0 || sample_rate < 0) {
+			return;
+		}
 		int err;
 		dec = opus_decoder_create(sample_rate, _channels, &err);
 		if(dec == nullptr) {
 			std::cerr << "[libopusjs] error while creating opus decoder (errcode " << err << ")" << std::endl;
 		}
 		
-		const auto buffer_size = (120 * (unsigned long) sample_rate * channels) / 1000; // 120ms max
+		const auto buffer_size = (120 * (size_t) sample_rate * channels) / 1000; // 120ms max
 		buffer = Float32Array(buffer_size);
 		channel_data = std::vector<Float32Array>(channels);
 		current_decoded_size = 0;
@@ -70,9 +73,9 @@ public:
 		const auto ret_size = opus_decode_float(
 				dec,
 				(const unsigned char *) data,
-				size,
+				int32_t(size),
 				buffer.data(),
-				buffer.size() / channels,
+				int(buffer.size() / channels),
 				0
 		);
 		
