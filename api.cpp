@@ -21,8 +21,9 @@ public:
 	Decoder(int _channels, int32_t sample_rate) : dec(nullptr), channels(_channels) {
 		int err;
 		dec = opus_decoder_create(sample_rate, _channels, &err);
-		if(dec == nullptr)
+		if(dec == nullptr) {
 			std::cerr << "[libopusjs] error while creating opus decoder (errcode " << err << ")" << std::endl;
+		}
 		
 		const auto buffer_size = (120 * (unsigned long) sample_rate * channels) / 1000; // 120ms max
 		buffer = Float32Array(buffer_size);
@@ -62,43 +63,38 @@ public:
 #endif
 	
 	bool decode(const char *data, size_t size) {
-		bool ok = false;
+		if(dec == nullptr || size == 0) {
+			return false;
+		}
 		
-		if(dec != nullptr) {
-			int ret_size = 0;
-			auto packet = std::string(data, size);
-			
-			if(!packet.empty())
-				ret_size = opus_decode_float(
-						dec,
-						(const unsigned char *) packet.c_str(),
-						packet.size(),
-						buffer.data(),
-						buffer.size() / channels,
-						0
-				);
-			
-			if(ret_size > 0) {
-				if(current_decoded_size != ret_size) {
-					// Reinit the output arrays.
-					current_decoded_size = ret_size;
-					for(size_t channel_index = 0; channel_index < channels; channel_index++) {
-						channel_data[channel_index] = new Float32Array(ret_size, 0);
-					}
-				}
-				
-				for(size_t channel_index = 0; channel_index < channels; channel_index++) {
-					Float32Array &channel_buffer = *channel_data[channel_index];
-					for(size_t i = 0; i < ret_size; i++) {
-						channel_buffer[i] = buffer[i * 2 + channel_index];
-					}
-				}
-				
-				ok = true;
+		const auto ret_size = opus_decode_float(
+				dec,
+				(const unsigned char *) data,
+				size,
+				buffer.data(),
+				buffer.size() / channels,
+				0
+		);
+		
+		if(ret_size < 0) {
+			return false;
+		}
+		
+		if(current_decoded_size != ret_size) {
+			// Reinit the output arrays.
+			current_decoded_size = ret_size;
+			for(size_t channel_index = 0; channel_index < channels; channel_index++) {
+				channel_data[channel_index] = new Float32Array(ret_size, 0);
 			}
 		}
 		
-		return ok;
+		for(size_t channel_index = 0; channel_index < channels; channel_index++) {
+			Float32Array &channel_buffer = *channel_data[channel_index];
+			for(size_t i = 0; i < ret_size; i++) {
+				channel_buffer[i] = buffer[i * 2 + channel_index];
+			}
+		}
+		return true;
 	}
 	
 	~Decoder() {
